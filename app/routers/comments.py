@@ -1,4 +1,4 @@
-from typing import Annotated
+from typing import Annotated, List
 from sqlalchemy.orm import Session
 from fastapi import APIRouter, Depends, HTTPException, Path, Request, status
 from uuid import UUID
@@ -95,3 +95,7 @@ async def delete_comment(
     db.delete(comment)
     db.commit()
 
+@router.get("/post/{post_id}/comments", response_model=List[CommentResponse])
+def get_comments_for_post(post_id: UUID, db: Session = Depends(get_db)):
+    comments = db.query(Comment).filter(Comment.post_id == post_id).all()
+    return comments
