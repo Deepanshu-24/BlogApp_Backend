@@ -3,7 +3,9 @@ from pydantic import BaseModel, Field, HttpUrl
 from sqlalchemy.orm import Session
 from sqlalchemy import desc
 from fastapi import APIRouter, Depends, HTTPException, Path, status, UploadFile,File,Form
-from ..models import Post,User
+from sqlalchemy.orm import joinedload
+from app.routers.comments import CommentResponse
+from ..models import Post,User,Comment
 from ..database import get_db
 from .auth import get_current_user
 from typing import Optional
@@ -39,6 +41,8 @@ class PostFeedResponse(BaseModel):
     author_id: UUID
     posted_at: datetime
     author_username: str
+    comment_count: int = 0
+    preview_comments: List[CommentResponse] = []
 
     class Config:
         from_attributes = True
@@ -62,22 +66,47 @@ async def read_all(user: user_dependency, db: db_dependency):
 
 
 @router.get("/feed", response_model=List[PostFeedResponse])
-async def get_feed(db: db_dependency, user : user_dependency, limit:int=10 , offset:int=0):
+async def get_feed(db: db_dependency, user: user_dependency, limit: int = 10, offset: int = 0):
 
-    posts = db.query(Post).order_by(desc(Post.posted_at)).limit(limit).offset(offset).all()
+    posts = db.query(Post).options(
+        joinedload(Post.comments).joinedload(Comment.user)
+    ).order_by(desc(Post.posted_at)).limit(limit).offset(offset).all()
 
-    return [PostFeedResponse(
+    result = []
+
+    for post in posts:
+        # total comments
+        comment_count = len(post.comments)
+
+        # only first 2 comments
+        preview = post.comments[:2]
+
+        preview_comments = [
+            CommentResponse(
+                id=c.id,
+                content=c.content,
+                user_id=c.user_id,
+                post_id=c.post_id,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+                user_username=c.user.username if c.user else "Unknown"
+            )
+            for c in preview
+        ]
+
+        result.append(PostFeedResponse(
             id=post.id,
             title=post.title,
             content=post.content,
             image_url=post.image_url,
             posted_at=post.posted_at,
             author_id=post.author.id,
-            author_username=post.author.username
-        )
-        for post in posts
-    ]
+            author_username=post.author.username,
+            comment_count=comment_count,
+            preview_comments=preview_comments
+        ))
 
+    return result
 
 @router.get("/{post_id}", response_model=PostResponse)
 async def read_posts(user: user_dependency, db: db_dependency, post_id: UUID ):
@@ -126,18 +155,34 @@ async def create_post(
 
 
 @router.put("/{post_id}", response_model= PostResponse)
-async def update_post(user: user_dependency, db: db_dependency,
-                      post_request : PostRequest ,
-                      post_id:UUID):
+async def update_post(
+    user: user_dependency, 
+    db: db_dependency,
+    post_id: UUID,
+    title: str = Form(...),
+    content: str = Form(...),
+    image_url: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None)
+):
 
     post_model = db.query(Post).filter(Post.id == post_id).filter(Post.author_id == user.id).first()
 
     if post_model is None:
         raise HTTPException(status_code=404, detail="Post not found")
 
-    post_model.title = post_request.title
-    post_model.content = post_request.content
-    post_model.image_url = post_request.image_url
+    if file:
+        if file.content_type not in ["image/jpeg", "image/png", "image/jpg"]:
+            raise HTTPException(status_code=400, detail="Invalid image type")
+        try:
+            result = cloudinary.uploader.upload(file.file)
+            post_model.image_url = result["secure_url"]
+        except Exception:
+            raise HTTPException(status_code=500, detail="Image upload failed")
+    elif image_url is not None:
+        post_model.image_url = image_url
+
+    post_model.title = title
+    post_model.content = content
 
     db.commit()
     db.refresh(post_model)
