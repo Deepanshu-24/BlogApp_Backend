@@ -15,7 +15,7 @@ def test_read_single_post(test_post):
     assert response.status_code == status.HTTP_200_OK
 
 
-def test_read_single_post_not_found():
+def test_read_single_post_not_found(test_user):
     response = client.get(f"/posts/{uuid.uuid4()}")
     assert response.status_code == 404
     assert response.json() == {"detail": "Post not found."}
@@ -37,7 +37,7 @@ def test_create_post(test_user):
 def test_update_post(test_post):
     response = client.put(
         f"/posts/{test_post.id}",
-        json={"title": "Updated Title", "content": "Updated Content", "image_url": None}
+        data={"title": "Updated Title", "content": "Updated Content"}
     )
     assert response.status_code == 200
 
@@ -47,10 +47,10 @@ def test_update_post(test_post):
     db.close()
 
 
-def test_update_post_not_found():
+def test_update_post_not_found(test_user):
     response = client.put(
         f"/posts/{uuid.uuid4()}",
-        json={"title": "Updated", "content": "Updated", "image_url": None}
+        data={"title": "Updated", "content": "Updated"}
     )
     assert response.status_code == 404
     assert response.json() == {"detail": "Post not found"}
@@ -66,7 +66,7 @@ def test_delete_post(test_post):
     db.close()
 
 
-def test_delete_post_not_found():
+def test_delete_post_not_found(test_user):
     response = client.delete(f"/posts/{uuid.uuid4()}")
     assert response.status_code == 404
     assert response.json() == {"detail": "Post not found"}
