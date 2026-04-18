@@ -27,6 +27,7 @@ class CommentResponse(BaseModel):
     post_id: UUID
     created_at: datetime
     updated_at: datetime | None
+    username: str
 
     class Config:
         from_attributes = True
@@ -50,6 +51,8 @@ async def comment(
     db.add(comment_model)
     db.commit()
     db.refresh(comment_model)
+    
+    comment_model.username = user.username
 
     return comment_model
 
