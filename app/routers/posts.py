@@ -89,7 +89,7 @@ async def get_feed(db: db_dependency, user: user_dependency, limit: int = 10, of
                 post_id=c.post_id,
                 created_at=c.created_at,
                 updated_at=c.updated_at,
-                user_username=c.user.username if c.user else "Unknown"
+                username=c.user.username if c.user else "anonymous"
             )
             for c in preview
         ]
