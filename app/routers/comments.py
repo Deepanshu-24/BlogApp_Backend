@@ -100,5 +100,12 @@ async def delete_comment(
 
 @router.get("/post/{post_id}/comments", response_model=List[CommentResponse])
 def get_comments_for_post(post_id: UUID, db: Session = Depends(get_db)):
-    comments = db.query(Comment).filter(Comment.post_id == post_id).all()
-    return comments
+    from sqlalchemy.orm import joinedload
+    comments = db.query(Comment).options(joinedload(Comment.user)).filter(Comment.post_id == post_id).all()
+    
+    result = []
+    for c in comments:
+        c.username = c.user.username if c.user else "anonymous"
+        result.append(c)
+        
+    return result
