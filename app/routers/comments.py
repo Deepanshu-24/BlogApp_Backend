@@ -51,10 +51,15 @@ async def comment(
     db.add(comment_model)
     db.commit()
     db.refresh(comment_model)
-    
-    comment_model.username = user.username
-
-    return comment_model
+    return CommentResponse(
+        id=comment_model.id,
+        content=comment_model.content,
+        user_id=comment_model.user_id,
+        post_id=comment_model.post_id,
+        created_at=comment_model.created_at,
+        updated_at=comment_model.updated_at,
+        username=user.username
+    )
 
 
 @router.put("/comments/{comment_id}", response_model=CommentResponse)
@@ -78,7 +83,15 @@ async def update_comment(
     db.commit()
     db.refresh(comment)
 
-    return comment
+    return CommentResponse(
+        id=comment.id,
+        content=comment.content,
+        user_id=comment.user_id,
+        post_id=comment.post_id,
+        created_at=comment.created_at,
+        updated_at=comment.updated_at,
+        username=user.username
+    )
 
 
 @router.delete("/comments/{comment_id}", status_code=204)
@@ -103,9 +116,14 @@ def get_comments_for_post(post_id: UUID, db: Session = Depends(get_db)):
     from sqlalchemy.orm import joinedload
     comments = db.query(Comment).options(joinedload(Comment.user)).filter(Comment.post_id == post_id).all()
     
-    result = []
-    for c in comments:
-        c.username = c.user.username if c.user else "anonymous"
-        result.append(c)
-        
-    return result
+    return [
+        CommentResponse(
+            id=c.id,
+            content=c.content,
+            user_id=c.user_id,
+            post_id=c.post_id,
+            created_at=c.created_at,
+            updated_at=c.updated_at,
+            username=c.user.username if getattr(c, "user", None) else "anonymous"
+        ) for c in comments
+    ]
